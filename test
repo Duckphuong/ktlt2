@@ -1,0 +1,210 @@
+#include <iostream>
+#include <iomanip>
+#include <cmath>
+#include <cstring>
+#include <climits>
+#include <cassert>
+#include <string>
+#include <fstream>
+#include <sstream>
+using namespace std;
+class TestStudyInPink;
+
+enum ItemType { MAGIC_BOOK, ENERGY_DRINK, FIRST_AID, EXCEMPTION_CARD, PASSING_CARD };
+enum ElementType { PATH, WALL, FAKE_WALL };
+enum RobotType { C=0, S, W, SW };
+
+class MapElement {
+protected:
+    ElementType type;
+public: 
+    MapElement(ElementType in_type){};
+    virtual ~MapElement(){};
+    virtual ElementType getType() const{
+        return type;
+    }
+};
+
+class Path : public MapElement {
+public:
+    Path() : MapElement(PATH) {}
+};
+
+// Concrete class Wall
+class Wall : public MapElement {
+public:
+    Wall() : MapElement(WALL) {}
+};
+
+
+class FakeWall : public MapElement {
+private:
+    int req_exp;
+
+public:
+    
+    FakeWall(int in_req_exp, int r, int c) : MapElement(FAKE_WALL) {
+        req_exp = (r * 257 + c * 139 + 89) % 900 + 1;
+    }
+    int getReqExp() const {
+        return req_exp;
+    }
+};
+
+class Position {
+private:
+    int r;
+    int c;
+public:
+  // Constructor with default values for row and column
+    Position(int r = 0, int c = 0) : r(r), c(c) {}
+    // Constructor with string representation of position
+    Position(const  string& str_pos) {
+        parsePositionString(str_pos);
+    }
+    // Getters for row and column
+    int getRow() const { return r; }
+    int getCol() const { return c; }
+    // Setters for row and column
+    void setRow(int r) { this->r = r; }
+    void setCol(int c) { this->c = c; }
+    // Convert position to string representation
+    string str() const { return "(" +  to_string(r) + "," +  to_string(c) + ")"; }
+
+    // Check if two positions are equal
+    bool isEqual(int in_r, int in_c) const { return (r == in_r) && (c == in_c); }
+
+    // Parse string representation of position and set row and column values
+    void parsePositionString(const  string& str_pos) {
+        int posf=str_pos.find(',');
+        string str_row=str_pos.substr(1,posf);
+        string str_col=str_pos.substr(posf+1,str_pos.length()-1);
+        r =  stoi(str_row);
+        c =  stoi(str_col);
+    }
+};
+
+
+class Map {
+private:
+    int num_rows;
+    int num_cols;
+    MapElement*** map;
+
+public:
+    // Constructor
+    Map(int num_rows, int num_cols, int num_walls, Position* array_walls, int num_fake_walls, Position* array_fake_walls) {
+        this->num_rows = num_rows;
+        this->num_cols = num_cols;
+
+    // Create 2D map using nested arrays of pointers
+    map = new MapElement**[num_rows];
+    for (int row = 0; row < num_rows; row++) {
+        map[row] = new MapElement*[num_cols];
+        for (int col = 0; col < num_cols; col++) {
+        // Initialize map elements based on positions
+            bool isWall = false;
+            bool isFakeWall = false;
+
+        // Check if position is in array_walls
+            for (int i = 0; i < num_walls; i++) {
+                if (array_walls[i].isEqual(row, col)) {
+                    isWall = true;
+                    break;
+                }
+            }
+
+            // Check if position is in array_fake_walls
+            for (int i = 0; i < num_fake_walls; i++) {
+                if (array_fake_walls[i].isEqual(row, col)) {
+                    isFakeWall = true;
+                    break;
+                }
+            }
+
+            // Create appropriate MapElement based on position
+            MapElement* element = nullptr;
+            if (isWall) {
+                element = new Wall();
+            } else if (isFakeWall) {
+                FakeWall fakeWall(0, row, col);
+                int req_exp = fakeWall.getReqExp();
+                element = new FakeWall(req_exp,row, col); // Calculate required exp
+            } else {
+                element = new Path();
+            }
+            map[row][col] = element;
+        }
+    }
+}
+    // Destructor
+    ~Map() {
+        // Clean up memory
+        for (int i = 0; i < num_rows; ++i) {
+            for (int j = 0; j < num_cols; ++j) {
+                delete map[i][j];
+            }
+            delete[] map[i];
+        }
+        delete[] map;
+    }
+
+    MapElement* getElement(int row, int col) const {
+        return map[row][col];
+    }
+    // Other methods can be added as needed
+};
+
+
+int main(){
+    
+   
+    FakeWall fakeWall(100,14,1);
+
+    // Kiểm tra phương thức getReqExp() của FakeWall
+    cout << "Required experience: " << fakeWall.getReqExp() << endl;
+
+    
+    int num_rows = 5;
+    int num_cols = 5;
+
+    // Define the positions of walls and fake walls
+    int num_walls = 2;
+    Position array_walls[num_walls] = {Position(0, 1), Position(1, 2)};
+
+    int num_fake_walls = 1;
+    Position array_fake_walls[num_fake_walls] = {Position(2, 3)};
+
+    // Create a Map object
+    Map map(num_rows, num_cols, num_walls, array_walls, num_fake_walls, array_fake_walls);
+
+    // Example: Print the type of each element in the map
+    for (int row = 0; row < num_rows; ++row) {
+        for (int col = 0; col < num_cols; ++col) {
+            ElementType type = map.getElement(row, col)->getType();
+            switch (type) {
+                case PATH:
+                    cout << "P ";
+                    break;
+                case WALL:
+                    cout << "W ";
+                    break;
+                case FAKE_WALL:
+                    cout << "F ";
+                    break;
+            }
+        }
+        cout << endl;
+    }
+
+    Position pos1(333, 3335);
+    Position pos2(pos1); // Copy constructor
+    Position pos3("(2,4)"); // Constructor with string
+
+    cout << array_fake_walls[0].str() <<  endl; // Output: (3,5)
+    cout << pos2.getRow() << " " << pos2.getCol() <<  endl; // Output: 3 5
+    cout << array_walls[1].str() <<  endl; // Output: (2,4)
+    cout << pos1.isEqual(3, 5) <<  endl; // Output: 1 (true)
+    cout << pos1.isEqual(2, 4) <<  endl; // Output: 0 (false)
+   
+}
