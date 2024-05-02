@@ -8,11 +8,15 @@
 #include <fstream>
 #include <sstream>
 using namespace std;
+
 class TestStudyInPink;
 
 enum ItemType { MAGIC_BOOK, ENERGY_DRINK, FIRST_AID, EXCEMPTION_CARD, PASSING_CARD };
 enum ElementType { PATH, WALL, FAKE_WALL };
 enum RobotType { C=0, S, W, SW };
+
+class Position;
+class MovingObject;
 
 class MapElement {
 protected:
@@ -27,24 +31,26 @@ public:
 
 class Path : public MapElement {
 public:
-    Path() : MapElement(PATH) {}
+    Path() : MapElement(PATH) {
+        type =PATH;
+    }
 };
 
-// Concrete class Wall
 class Wall : public MapElement {
 public:
-    Wall() : MapElement(WALL) {}
+    Wall() : MapElement(WALL) {
+        type=WALL;
+    }
 };
-
 
 class FakeWall : public MapElement {
 private:
     int req_exp;
 
 public:
-    
     FakeWall(int in_req_exp, int r, int c) : MapElement(FAKE_WALL) {
         req_exp = (r * 257 + c * 139 + 89) % 900 + 1;
+        type=FAKE_WALL;
     }
     int getReqExp() const {
         return req_exp;
@@ -82,8 +88,12 @@ public:
         r =  stoi(str_row);
         c =  stoi(str_col);
     }
+    static const Position npos;
+    bool operator!=(const Position& other) const {
+        return (r != other.r) || (c != other.c);
+    }
 };
-
+const Position Position::npos = Position(-1, -1);
 
 class Map {
 private:
@@ -129,7 +139,7 @@ public:
             } else if (isFakeWall) {
                 FakeWall fakeWall(0, row, col);
                 int req_exp = fakeWall.getReqExp();
-                element = new FakeWall(req_exp,row, col); // Calculate required exp
+                element = new FakeWall(req_exp,row, col); 
             } else {
                 element = new Path();
             }
@@ -152,59 +162,428 @@ public:
     MapElement* getElement(int row, int col) const {
         return map[row][col];
     }
+    int getNumRows() const {
+        return num_rows;
+    }
+    int getNumCols() const {
+        return num_cols;
+    }
     // Other methods can be added as needed
+    bool isValid(const Position& pos, MovingObject* mv_obj) const;
+};
+
+class MovingObject {
+protected:
+    int index;
+    Position pos;
+    Map * map;
+    string name;
+
+public:
+    MovingObject(int index, const Position pos, Map* map, const std::string& name = ""): index(index), pos(pos), map(map), name(name) {}
+    virtual ~MovingObject(){};
+    virtual Position getNextPosition() = 0;
+    Position getCurrentPosition() const{
+        return pos;
+    };
+    virtual void move() = 0;
+    virtual string str() const = 0;
+    string getName() const {
+        return name;
+    }
+};
+
+class Sherlock : public MovingObject {
+private:
+    // TODO
+    string moving_rule;
+    int hp;
+    int exp;
+
+public:
+    public:
+    // Constructor
+    Sherlock(int index, const string& moving_rule, const Position& init_pos, Map* map, int init_hp, int init_exp)
+        : MovingObject(index, init_pos, map, "Sherlock"), moving_rule(moving_rule) {
+        // Initialize hp and exp within the valid range
+        hp = (init_hp < 0) ? 0 : (init_hp > 500) ? 500 : init_hp;
+        exp = (init_exp < 0) ? 0 : (init_exp > 900) ? 900 : init_exp;
+    }
+
+    // Destructor
+    virtual ~Sherlock() {}
+
+    // Method to get next position based on moving_rule
+    virtual Position getNextPosition() override {
+        // Get the next direction from moving_rule
+        if (moving_rule.empty()){
+            return Position::npos;
+        }
+        //char direction = moving_rule[index % moving_rule.size()];
+        static size_t next_index = 0;
+        char direction = moving_rule[next_index++];
+        if (next_index == moving_rule.size()) next_index = 0;
+        
+        // Calculate the next position based on the direction
+        int next_r = pos.getRow();
+        int next_c = pos.getCol();
+        switch (direction) {
+            case 'L':
+                if(next_c>=0){
+                    next_c--;
+                    break;
+                }
+            case 'R':
+                if(next_c>=0){
+                    next_c++;
+                    break;
+                }
+            case 'U':
+                if(next_r>=0){
+                    next_r--;
+                    break;
+                }
+            case 'D':
+                if(next_r>=0){
+                    next_r++;
+                    break;
+                }
+            default:
+                break;
+        }
+
+        // Create the next position object
+        Position next_pos(next_r, next_c);
+
+        // Check if the next position is valid
+        // if (map->isValid(next_pos, this)) {
+        //     return next_pos;
+        // } else {
+        //     return Position::npos; // Return npos if the next position is invalid
+        // }
+        return (map->isValid(next_pos, this)) ? next_pos : Position::npos;
+    }
+
+    // Method to move Sherlock
+    virtual void move() override {
+        Position next_pos = getNextPosition();
+        if (next_pos != Position::npos) {
+            pos = next_pos;
+        }
+    }
+
+    // Method to return string representation of Sherlock
+    virtual string str() const override {
+        return "Sherlock[index=" + to_string(index) + ";pos=" + pos.str() + ";moving_rule=" + moving_rule + "]";
+    }
+};
+
+class Watson : public MovingObject {
+private:
+    string moving_rule;
+    int hp;
+    int exp;
+
+public:
+    // Constructor
+    Watson(int index, const string& moving_rule, const Position& init_pos, Map* map, int init_hp, int init_exp)
+        : MovingObject(index, init_pos, map, "Watson"), moving_rule(moving_rule) {
+        // Initialize hp and exp within the valid range
+        hp = (init_hp < 0) ? 0 : (init_hp > 500) ? 500 : init_hp;
+        exp = (init_exp < 0) ? 0 : (init_exp > 900) ? 900 : init_exp;
+    }
+
+    // Destructor
+    virtual ~Watson() {}
+
+    // Method to get next position based on moving_rule
+    virtual Position getNextPosition() override {
+        // Get the next direction from moving_rule
+        if (moving_rule.empty()){
+            return Position::npos;
+        }
+        //char direction = moving_rule[index % moving_rule.size()];
+        static size_t next_index = 0;
+        char direction = moving_rule[next_index++];
+        if (next_index == moving_rule.size()) next_index = 0;
+        
+        // Calculate the next position based on the direction
+        int next_r = pos.getRow();
+        int next_c = pos.getCol();
+        switch (direction) {
+            case 'L':
+                if(next_c>=0){
+                    next_c--;
+                    break;
+                }
+            case 'R':
+                if(next_c>=0){
+                    next_c++;
+                    break;
+                }
+            case 'U':
+                if(next_r>=0){
+                    next_r--;
+                    break;
+                }
+            case 'D':
+                if(next_r>=0){
+                    next_r++;
+                    break;
+                }
+            default:
+                break;
+        }
+
+        // Create the next position object
+        Position next_pos(next_r, next_c);
+
+        // Check if the next position is valid
+        // if (map->isValid(next_pos, this)) {
+        //     return next_pos;
+        // } else {
+        //     return Position::npos; // Return npos if the next position is invalid
+        // }
+        return (map->isValid(next_pos, this)) ? next_pos : Position::npos;
+    }
+
+    // Method to move Watson
+    virtual void move() override {
+        Position next_pos = getNextPosition();
+        if (next_pos != Position::npos) {
+            pos = next_pos;
+        }
+    }
+
+    // Method to return string representation of Watson
+    virtual std::string str() const override {
+        return "Watson[index=" + to_string(index) + ";pos=" + pos.str() + ";moving_rule=" + moving_rule + "]";
+    }
+    int getexpW() const{
+        return exp;
+    }
+};
+
+bool Map::isValid(const Position& pos, MovingObject* mv_obj) const {
+    
+    if (pos.getRow() < 0 || pos.getRow() >= num_rows || pos.getCol() < 0 || pos.getCol() >= num_cols) {
+        return false;
+    }
+
+    // Check if the position is not a wall
+    MapElement* element = map[pos.getRow()][pos.getCol()];
+    if (element->getType() == WALL) {
+        return false;
+    }
+
+    
+    // if (mv_obj->getName() == "Sherlock") {
+    //     // Sherlock can move onto FakeWall
+    //     if (element->getType() == FAKE_WALL) {
+    //         return true;
+    //     }
+    // }
+    
+    if (mv_obj->getName() == "Watson") {
+        
+        if (element->getType() == FAKE_WALL) {
+            Watson* watson = dynamic_cast<Watson*>(mv_obj);
+            
+        // Kiểm tra xem chuyển đổi có thành công không
+            if (watson) {
+                FakeWall* fake_wall = dynamic_cast<FakeWall*>(element);
+                // Lấy exp của Watson và req_exp của FakeWall
+                int watson_exp = watson->getexpW();
+                int req_exp = fake_wall->getReqExp();
+                // Kiểm tra điều kiện EXP requirement
+                return watson_exp >= req_exp;
+            }
+        }
+    }
+    return true; 
+}
+
+class Criminal : public MovingObject {
+private:
+    Sherlock* sherlock;
+    Watson* watson;
+
+public:
+    Criminal(int index, const Position& init_pos, Map* map, Sherlock* sherlock, Watson* watson)
+        : MovingObject(index, init_pos, map, "Criminal"), sherlock(sherlock), watson(watson) {}
+
+    int manhattanDistance(int r1, int c1, int r2, int c2) const {
+        return abs(r1 - r2) + abs(c1 - c2);
+    }
+
+    Position getNextPosition() override {
+    // Lưu vị trí và khoảng cách lớn nhất
+    Position nextPos = pos;
+    int maxDistance = 0;
+    int totalDistance;
+    int x=0;
+    int dx[4]={-1,0,1,0};
+    int dy[4]={0,-1,0,1};
+    for(int i=0;i<4;i++){
+        Position newPos(pos.getRow()+dx[i], pos.getCol()+dy[i]);
+        if(pos.getRow()+dx[i]>=0 && pos.getCol()+dy[i]>=0){
+            if (map->isValid(nextPos, this)) {
+                // Tính khoảng cách từ vị trí tiếp theo đến Sherlock và Watson
+                int distanceToSherlock = manhattanDistance(newPos.getRow()+dx[i], newPos.getCol()+dy[i], sherlock->getCurrentPosition().getRow(), sherlock->getCurrentPosition().getCol());
+                int distanceToWatson = manhattanDistance(newPos.getRow()+dx[i], newPos.getCol()+dy[i], watson->getCurrentPosition().getRow(), watson->getCurrentPosition().getCol());
+                int totalDistance = distanceToSherlock + distanceToWatson;
+                if(totalDistance>maxDistance){
+                    maxDistance=totalDistance;
+                    nextPos = newPos;
+                }
+            }
+        }
+    }
+    return nextPos;
+}
+    void move() override {
+        Position next_pos = getNextPosition();
+        if (next_pos != Position::npos)
+            pos = next_pos;
+    }
+
+    string str() const override {
+        return "Criminal[index=" + to_string(index) + ";pos=" + pos.str() +"]" ;
+    }
 };
 
 
+class ArrayMovingObject {
+private:
+    MovingObject** arr_mv_objs;
+    int count;
+    int capacity;
+
+public:
+    ArrayMovingObject(int cap) : count(0), capacity(cap) {
+        arr_mv_objs = new MovingObject*[capacity];
+    }
+
+    ~ArrayMovingObject() {
+        for (int i = 0; i < count; ++i) {
+            delete arr_mv_objs[i];
+        }
+        delete[] arr_mv_objs;
+    }
+
+    bool isFull() const {
+        return count == capacity;
+    }
+
+    bool add(MovingObject* mv_obj) {
+        if (count < capacity) {
+            arr_mv_objs[count++] = mv_obj;
+            return true;
+        }
+        return false;
+    }
+    
+    
+    string str() const {
+        string result = "ArrayMovingObject[count=" + to_string(count) + ";capacity=" + to_string(capacity) + ";";
+        for (int i = 0; i < count; ++i) {
+            result += arr_mv_objs[i]->str();
+            if (i < count - 1) {
+                result += ";";
+            }
+        }
+        result += "]";
+        return result;
+    }
+
+    // MovingObject * get(int index) const;
+    // int size() const; // return current number of elements in the array
+};
+
+
+
+
+
+
+
 int main(){
-    
-   
-    FakeWall fakeWall(100,14,1);
-
-    // Kiểm tra phương thức getReqExp() của FakeWall
-    cout << "Required experience: " << fakeWall.getReqExp() << endl;
-
-    
+    // Khởi tạo các thông tin cho bản đồ
     int num_rows = 5;
     int num_cols = 5;
-
-    // Define the positions of walls and fake walls
     int num_walls = 2;
-    Position array_walls[num_walls] = {Position(0, 1), Position(1, 2)};
-
+    // Khởi tạo bản đồ
+    Position array_walls[] = { Position(0, 4), Position(3, 2) }; // Tạo mảng các vị trí của các bức tường
     int num_fake_walls = 1;
-    Position array_fake_walls[num_fake_walls] = {Position(2, 3)};
-
-    // Create a Map object
+    Position array_fake_walls[] = { Position(2, 0) }; 
     Map map(num_rows, num_cols, num_walls, array_walls, num_fake_walls, array_fake_walls);
-
-    // Example: Print the type of each element in the map
-    for (int row = 0; row < num_rows; ++row) {
-        for (int col = 0; col < num_cols; ++col) {
-            ElementType type = map.getElement(row, col)->getType();
-            switch (type) {
+    Sherlock sherlock(1, "DD", Position(4, 3), &map, 100, 800);
+    Watson watson(2, "UD", Position(0, 0), &map, 200, 700);
+    FakeWall fakewall(0,array_fake_walls[0].getRow(),array_fake_walls[0].getCol());
+    Position criminal_pos(2, 0);
+    Criminal criminal(0, criminal_pos, &map, &sherlock, &watson);
+    ArrayMovingObject arr(3);
+    arr.add(&sherlock);
+    arr.add(&watson);
+    arr.add(&criminal);
+    // Tạo mảng các vị trí của các bức tường giả
+    cout<<fakewall.getReqExp()<<endl;
+    cout<<watson.getexpW()<<endl;
+    cout<<sherlock.str()<<endl;
+    sherlock.move();
+    cout << sherlock.str() << std::endl;
+    sherlock.move();
+    cout << sherlock.str() << std::endl;
+    sherlock.move();
+    cout << sherlock.str() << std::endl;
+    sherlock.move();
+    cout << sherlock.str() << std::endl;
+    // Lặp qua từng phần tử của bản đồ và in ra loại của từng phần tử
+    for (int row = 0; row < num_rows; row++) {
+        for (int col = 0; col < num_cols; col++) {
+            MapElement* element = map.getElement(row, col);
+            switch (element->getType()) {
                 case PATH:
-                    cout << "P ";
+                    cout << "_";
                     break;
                 case WALL:
-                    cout << "W ";
+                    cout << "|";
                     break;
                 case FAKE_WALL:
-                    cout << "F ";
+                    cout << ":";
                     break;
+                default:
+                    cout << "Unknown ";
             }
         }
         cout << endl;
     }
+    
 
-    Position pos1(333, 3335);
-    Position pos2(pos1); // Copy constructor
-    Position pos3("(2,4)"); // Constructor with string
+    // Test isValid function for Sherlock
+    cout << "Is position (0,4) valid for Sherlock?"<<map.isValid(Position(0, 4), &sherlock) << endl;
+    cout << "Is position (1,1) valid for Sherlock? " << (map.isValid(Position(1, 1), &sherlock) ) << endl;
+    cout << "Is position (2,0) valid for Sherlock? " << (map.isValid(Position(2, 0), &sherlock)) << endl;
 
-    cout << array_fake_walls[0].str() <<  endl; // Output: (3,5)
-    cout << pos2.getRow() << " " << pos2.getCol() <<  endl; // Output: 3 5
-    cout << array_walls[1].str() <<  endl; // Output: (2,4)
-    cout << pos1.isEqual(3, 5) <<  endl; // Output: 1 (true)
-    cout << pos1.isEqual(2, 4) <<  endl; // Output: 0 (false)
-   
+    // Test isValid function for Watson
+    cout << "Is position (0,4) valid for Watson? " << (map.isValid(Position(0, 4), &watson)) << endl;
+    cout << "Is position (1,1) valid for Sherlock? " << (map.isValid(Position(1, 1), &watson) ) << endl;
+    cout << "Is position (2,0) valid for Watson? " << (map.isValid(Position(2, 0), &watson) ) << endl;
+    cout << "Is position (3,2) valid for Watson? " << (map.isValid(Position(3, 2), &watson) ) << endl;
+    cout<<map.isValid(Position(2, 0), &watson)<<endl;
+    cout << sherlock.str() << std::endl;
+    cout << watson.str() << std::endl;
+    
+    cout << "Initial position of Criminal: " << criminal.str() << endl;
+
+    // Di chuyển và in vị trí mới của Criminal
+    criminal.move();
+    cout << "New position of Criminal: " << criminal.str() << endl;
+    cout << arr.str() << endl;
+
+    // Di chuyển các đối tượng và in ra thông tin mới
+    sherlock.move();
+    watson.move();
+    criminal.move();
+    cout << arr.str() << endl;
+    
 }
