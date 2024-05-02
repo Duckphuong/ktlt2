@@ -1,0 +1,37 @@
+bool Map::isValid(const Position& pos, MovingObject* mv_obj) const {
+    
+    if (pos.getRow() < 0 || pos.getRow() >= num_rows || pos.getCol() < 0 || pos.getCol() >= num_cols) {
+        return false;
+    }
+
+    // Check if the position is not a wall
+    MapElement* element = map[pos.getRow()][pos.getCol()];
+    if (element->getType() == WALL) {
+        return false;
+    }
+
+    
+    if (mv_obj->getName() == "Sherlock") {
+        // Sherlock can move onto FakeWall
+        if (element->getType() == FAKE_WALL) {
+            return true;
+        }
+    }
+    if (mv_obj->getName() == "Watson") {
+        
+         if (element->getType() == FAKE_WALL) {
+            Watson* watson = dynamic_cast<Watson*>(mv_obj);
+            
+        // Kiểm tra xem chuyển đổi có thành công không
+            if (watson) {
+                FakeWall* fake_wall = dynamic_cast<FakeWall*>(element);
+                // Lấy exp của Watson và req_exp của FakeWall
+                int watson_exp = watson->getexpW();
+                int req_exp = fake_wall->getReqExp();
+                // Kiểm tra điều kiện EXP requirement
+                return watson_exp >= req_exp;
+            }
+        }
+    }
+    return true; 
+}
